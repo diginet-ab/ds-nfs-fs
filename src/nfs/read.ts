@@ -7,18 +7,18 @@
 import * as assert from 'assert-plus'
 import * as nfs from '@diginet/nfs'
 import * as common from './common'
-import { getDsFs } from '../fs'
+import { Req } from '.';
 
-function read(call, reply, next) {
-    var data = Buffer.alloc(call.count)
-    var log = call.log
-    var stats = call.stats
+function read(req: Req, reply, next) {
+    var data = Buffer.alloc(req.count)
+    var log = req.log
+    var stats = req.stats
 
-    log.debug('read(%s, %d, %d): entered', call.object, call.offset, call.count)
+    log.debug('read(%s, %d, %d): entered', req.object, req.offset, req.count)
 
     assert.ok(stats)
 
-    getDsFs().read(stats.fd, data, 0, call.count, call.offset, function(err, n) {
+    req.fs.read(stats.fd, data, 0, req.count, req.offset, function(err, n) {
         if (err) {
             log.warn(err, 'read: fsCache.read failed')
             reply.error(nfs.NFS3ERR_IO)
@@ -28,18 +28,18 @@ function read(call, reply, next) {
 
         // use stat.size to determine eof
         var eof = false
-        if (stats.size <= call.offset + n) {
+        if (stats.size <= req.offset + n) {
             eof = true
 
             // If we're at EOF, we assume we can close the FD out
-            if (call.fd_cache.has(call.object)) call.fd_cache.del(call.object)
+            if (req.fd_cache.has(req.object)) req.fd_cache.del(req.object)
         }
 
         // some NFS clients verify that the returned buffer
         // length matches the result count
-        if (n < call.count) data = data.slice(0, n)
+        if (n < req.count) data = data.slice(0, n)
 
-        log.debug('read(%s): done => %d', call.object, n)
+        log.debug('read(%s): done => %d', req.object, n)
 
         reply.count = n
         reply.data = data

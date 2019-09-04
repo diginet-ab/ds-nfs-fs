@@ -11,6 +11,7 @@ import * as assert from 'assert-plus'
 import * as nfs from '@diginet/nfs'
 
 import * as auth from './auth'
+import { MountConfig } from './server'
 
 ///--- Globals
 
@@ -45,7 +46,7 @@ function ensure_allowed(req, res, next) {
     next()
 }
 
-function ensure_exports(req, res, next) {
+function ensure_allowMount(req, res, next) {
     assert.string(req.dirpath, 'req.dirpath')
 
     var p = path.normalize(req.dirpath)
@@ -57,19 +58,10 @@ function ensure_exports(req, res, next) {
     }
 
     // export entries are optional
-    if (req.exports) {
+    if (req.allowMount) {
         // since we have exports, we must check each one since the client may
         // be trying to mount a subdir of an export
-        var found = false
-        for (var i in req.exports) {
-            if (p.indexOf(i) === 0) {
-                found = true
-                break
-            }
-        }
-
-        if (!found) {
-            req.log.warn('mountd (%s) is not exported', p)
+        if (!req.allowMount(p)) {
             res.error(nfs.MNT3ERR_ACCES)
             next(false)
             return
@@ -122,9 +114,9 @@ function umount(call, reply, next) {
     next()
 }
 
-export function createMountServer(opts) {
+export function createMountServer(opts: MountConfig) {
     assert.object(opts, 'options')
-    assert.optionalObject(opts.exports, 'options.exports')
+
     assert.optionalObject(opts.hosts_allow, 'options.hosts_allow')
     assert.optionalObject(opts.hosts_deny, 'options.hosts_deny')
     assert.object(opts.log, 'options.log')
@@ -136,15 +128,15 @@ export function createMountServer(opts) {
 
     s.use(auth.authorize)
     s.use(function setup(req, res, next) {
-        req.exports = opts.exports
+        req.allowMount = opts.allowMount
         req.hosts_allow = opts.hosts_allow
         req.hosts_deny = opts.hosts_deny
         req.fhdb = opts.fhdb
         next()
     })
-    s.mnt(ensure_allowed, ensure_exports, mount)
+    s.mnt(ensure_allowed, ensure_allowMount, mount)
 
-    s.umnt(ensure_allowed, ensure_exports, umount)
+    s.umnt(ensure_allowed, ensure_allowMount, umount)
 
     s.on('after', function(name, call, reply, err) {
         opts.log.debug(

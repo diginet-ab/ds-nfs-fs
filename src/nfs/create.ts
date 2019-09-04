@@ -6,7 +6,7 @@
 
 import * as path from 'path'
 import * as nfs from '@diginet/nfs'
-import { getDsFs } from '../fs'
+import { Req } from '.';
 
 async function create_lookup_dir(call, reply, next) {
     var log = call.log
@@ -28,8 +28,8 @@ async function create_lookup_dir(call, reply, next) {
     next()
 }
 
-async function do_create(flags, call, reply, next) {
-    var mode = call.obj_attributes.mode
+async function do_create(flags, req: Req, reply, next) {
+    var mode = req.obj_attributes.mode
 
     // mode is null when call.how === nfs.create_how.EXCLUSIVE
     if (mode === null) mode = parseInt('0644', 8)
@@ -37,9 +37,9 @@ async function do_create(flags, call, reply, next) {
     // We don't use the fd cache here since that only works with existing files
     // and always opens with the 'r+' flag. We need to create the file here
     // with either the 'w' or 'wx' flags.
-    getDsFs().open(call._filename, flags, mode, async function(open_err, fd) {
+    req.fs.open(req._filename, flags, mode, async function(open_err, fd) {
         if (open_err) {
-            call.log.warn(open_err, 'create: open failed')
+            req.log.warn(open_err, 'create: open failed')
             reply.error(nfs.NFS3ERR_SERVERFAULT)
             next(false)
             return
@@ -62,36 +62,36 @@ async function do_create(flags, call, reply, next) {
             })
         })*/
 
-        getDsFs().close(fd, function(close_err) {
+        req.fs.close(fd, function(close_err) {
             next()
         })
     })
 }
 
-function create(call, reply, next) {
-    var log = call.log
+function create(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('create(%s, %d): entered', call.object, call.how)
+    log.debug('create(%s, %d): entered', req.object, req.how)
 
-    if (call.how === nfs.create_how.EXCLUSIVE) {
-        getDsFs().stat(call._filename, function(err, stats) {
+    if (req.how === nfs.create_how.EXCLUSIVE) {
+        req.fs.stat(req._filename, function(err, stats) {
             if (err && err.code === 'ENOENT') {
                 // This is the "normal" code path (i.e. non-error)
-                do_create('wx', call, reply, next)
+                do_create('wx', req, reply, next)
             } else {
                 log.debug('create (exclusive) file exists')
                 reply.error(nfs.NFS3ERR_EXIST)
                 next(false)
             }
         })
-    } else if (call.how === nfs.create_how.UNCHECKED) {
-        do_create('w', call, reply, next)
+    } else if (req.how === nfs.create_how.UNCHECKED) {
+        do_create('w', req, reply, next)
     } else {
         // call.how === nfs.create_how.GUARDED
-        getDsFs().stat(call._filename, function(err, stats) {
+        req.fs.stat(req._filename, function(err, stats) {
             if (err && err.code === 'ENOENT') {
                 // This is the "normal" code path (i.e. non-error)
-                do_create('w', call, reply, next)
+                do_create('w', req, reply, next)
             } else {
                 log.debug('create (guarded) file exists')
                 reply.error(nfs.NFS3ERR_EXIST)
@@ -101,15 +101,15 @@ function create(call, reply, next) {
     }
 }
 
-async function create_lookup(call, reply, next) {
-    var log = call.log
+async function create_lookup(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('create_lookup(%s): entered', call._filename)
+    log.debug('create_lookup(%s): entered', req._filename)
 
     try {
-        var fhandle = await call.fhdb.lookup(call._filename)
+        var fhandle = await req.fhdb.lookup(req._filename)
     } catch (err) {
-        log.warn(err, 'create_lookup(%s): failed', call._filename)
+        log.warn(err, 'create_lookup(%s): failed', req._filename)
         reply.error(err.nfsErrorCode) // Was nfs.NFS3ERR_STALE
         next(false)
         return
@@ -121,20 +121,20 @@ async function create_lookup(call, reply, next) {
     next()
 }
 
-function create_stat(call, reply, next) {
-    var log = call.log
+function create_stat(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('create_stat(%s): entered', call._filename)
-    getDsFs().stat(call._filename, function(err, stats) {
+    log.debug('create_stat(%s): entered', req._filename)
+    req.fs.stat(req._filename, function(err, stats) {
         if (err) {
-            log.warn(err, 'create_stat(%s): failed', call._filename)
+            log.warn(err, 'create_stat(%s): failed', req._filename)
             reply.error(nfs.NFS3ERR_STALE)
             next(false)
             return
         }
 
         reply.setObjAttributes(stats)
-        log.debug({ stats: stats }, 'create_stat(%s): done', call._filename)
+        log.debug({ stats: stats }, 'create_stat(%s): done', req._filename)
         reply.send()
         next()
     })

@@ -6,9 +6,9 @@
 
 import * as nfs from '@diginet/nfs'
 import * as path from 'path'
-import { getDsFs } from '../fs'
+import { Req } from '.';
 
-async function symlink_lookup_dir(req, res, next) {
+async function symlink_lookup_dir(req: Req, res, next) {
     var log = req.log
 
     log.debug('symlink_lookup_dir(%s): entered', req.where.dir)
@@ -28,11 +28,11 @@ async function symlink_lookup_dir(req, res, next) {
     next()
 }
 
-function symlink(req, res, next) {
+function symlink(req: Req, res, next) {
     var log = req.log
 
     log.debug('symlink(%s->%j): entered', req._filename, req.symlink_data)
-    getDsFs().symlink(req.symlink_data, req._filename, function(err) {
+    req.fs.symlink(req.symlink_data, req._filename, function(err) {
         if (err) {
             log.warn(err, 'symlink(%s): failed', req._filename)
             // XXX better error return codes
@@ -46,7 +46,7 @@ function symlink(req, res, next) {
     })
 }
 
-async function symlink_lookup(req, res, next) {
+async function symlink_lookup(req: Req, res, next) {
     var log = req.log
 
     log.debug('symlink_lookup(%s): entered', req._filename)
@@ -65,11 +65,11 @@ async function symlink_lookup(req, res, next) {
     next()
 }
 
-function symlink_stat(req, res, next) {
+function symlink_stat(req: Req, res, next) {
     var log = req.log
 
     log.debug('symlink_stat(%s): entered', req._filename)
-    getDsFs().lstat(req._filename, function(err, stats) {
+    req.fs.lstat(req._filename, function(err, stats) {
         if (err) {
             log.warn(err, 'symlink_stat(%s): failed', req._filename)
             res.error(nfs.NFS3ERR_IO)

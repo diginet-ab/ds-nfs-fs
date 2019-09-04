@@ -6,62 +6,62 @@
 
 import * as path from 'path'
 import * as nfs from '@diginet/nfs'
-import { getDsFs } from '../fs'
+import { Req } from '.';
 
-async function mkdir_lookup_dir(call, reply, next) {
-    var log = call.log
+async function mkdir_lookup_dir(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('mkdir_lookup_dir(%s): entered', call.where.dir)
+    log.debug('mkdir_lookup_dir(%s): entered', req.where.dir)
 
     try {
-        var name = await call.fhdb.fhandle(call.where.dir)
+        var name = await req.fhdb.fhandle(req.where.dir)
     } catch (err) {
-        log.warn(err, 'mkdir_lookup_dir(%s): fhandle notfound', call.where.dir)
+        log.warn(err, 'mkdir_lookup_dir(%s): fhandle notfound', req.where.dir)
         reply.error(err.nfsErrorCode)
         next(false)
         return
     }
 
-    call._dirname = name
-    call._filename = path.join(name, call.where.name)
-    log.debug('mkdir_lookup_dir(%s): done -> %s', call.where.dir, name)
+    req._dirname = name
+    req._filename = path.join(name, req.where.name)
+    log.debug('mkdir_lookup_dir(%s): done -> %s', req.where.dir, name)
     next()
 }
 
-function mkdir_stat_dir(call, reply, next) {
-    var log = call.log
+function mkdir_stat_dir(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('mkdir_stat_dir(%s): entered', call._dirname)
-    getDsFs().stat(call._dirname, function(err, stats) {
+    log.debug('mkdir_stat_dir(%s): entered', req._dirname)
+    req.fs.stat(req._dirname, function(err, stats) {
         if (err) {
-            log.warn(err, 'mkdir_stat_dir(%s): failed', call._dirname)
+            log.warn(err, 'mkdir_stat_dir(%s): failed', req._dirname)
             reply.error(nfs.NFS3ERR_IO)
             next(false)
             return
         }
         if (!stats.isDirectory()) {
-            log.warn(err, 'mkdir_stat_dir(%s): not a directory', call._dirname)
+            log.warn(err, 'mkdir_stat_dir(%s): not a directory', req._dirname)
             reply.error(nfs.NFS3ERR_NOTDIR)
             next(false)
             return
         }
 
-        log.debug('mkdir_stat_dir(%s): done', call._dirname)
+        log.debug('mkdir_stat_dir(%s): done', req._dirname)
         next()
     })
 }
 
-function mkdir(call, reply, next) {
-    var log = call.log
+function mkdir(req: Req, reply, next) {
+    var log = req.log
     var mode
 
-    if (call.attributes.mode !== null) mode = call.attributes.mode
+    if (req.attributes.mode !== null) mode = req.attributes.mode
     else mode = parseInt('0755')
 
-    log.debug('mkdir(%s, %d): entered', call._filename, mode)
-    getDsFs().mkdir(call._filename, mode, function(err) {
+    log.debug('mkdir(%s, %d): entered', req._filename, mode)
+    req.fs.mkdir(req._filename, mode, function(err) {
         if (err) {
-            log.warn(err, 'mkdir(%s): failed', call._filename)
+            log.warn(err, 'mkdir(%s): failed', req._filename)
             reply.error(nfs.NFS3ERR_NOTDIR)
             next(false)
             return
@@ -71,7 +71,7 @@ function mkdir(call, reply, next) {
         // Not supported in BrowserFs
         /*fs.fs.chown(call._filename, call.auth.uid, call.auth.gid, function(cerr) {
             if (cerr) call.log.warn(cerr, 'mkdir: chown failed')*/
-        log.debug('mkdir(%s): done', call._filename)
+        log.debug('mkdir(%s): done', req._filename)
         next()
         //})
     })
@@ -96,20 +96,20 @@ async function mkdir_lookup(call, reply, next) {
     next()
 }
 
-function mkdir_stat_newdir(call, reply, next) {
-    var log = call.log
+function mkdir_stat_newdir(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('mkdir_stat_newdir(%s): entered', call._filename)
-    getDsFs().stat(call._filename, function(err, stats) {
+    log.debug('mkdir_stat_newdir(%s): entered', req._filename)
+    req.fs.stat(req._filename, function(err, stats) {
         if (err) {
-            log.warn(err, 'mkdir_stat_newdir(%s): failed', call._filename)
+            log.warn(err, 'mkdir_stat_newdir(%s): failed', req._filename)
             reply.error(nfs.NFS3ERR_NOENT)
             next(false)
             return
         }
 
         reply.setObjAttributes(stats)
-        log.debug({ stats: stats }, 'mkdir_stat_newdir(%s): done', call._filename)
+        log.debug({ stats: stats }, 'mkdir_stat_newdir(%s): done', req._filename)
         reply.send()
         next()
     })

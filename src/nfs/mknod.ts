@@ -5,8 +5,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import * as nfs from '@diginet/nfs'
+import { Req } from '.';
 
-function mknod(req, res, next) {
+function mknod(req: Req, res, next) {
     req.log.debug('mknod: entered')
     res.error(nfs.NFS3ERR_NOTSUPP)
     next(false)

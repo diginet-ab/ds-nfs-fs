@@ -1,3 +1,5 @@
+import { Req } from ".";
+
 // Copyright 2016 Joyent, Inc.
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
@@ -7,10 +9,10 @@
 ///--- API
 
 // Stolen from: http://goo.gl/fBLulQ (IBM)
-function fsstat(call, reply, next) {
-    var log = call.log
+function fsstat(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('fsstat(%s): entered', call.vfspath)
+    log.debug('fsstat(%s): entered', req.vfspath)
 
     let stats = {
         blocks: 1000,
@@ -30,7 +32,7 @@ function fsstat(call, reply, next) {
     reply.afiles = stats.favail
     reply.invarsec = 0
 
-    log.debug('fsstat(%s): done', call.vfspath)
+    log.debug('fsstat(%s): done', req.vfspath)
     reply.send()
     next()
 

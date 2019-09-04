@@ -6,11 +6,11 @@
 
 import * as nfs from '@diginet/nfs'
 import * as path from 'path'
-import { getDsFs } from '../fs'
+import { Req } from '.';
 
 ///-- API
 
-async function link_lookup_file(req, res, next) {
+async function link_lookup_file(req: Req, res, next) {
     var log = req.log
 
     log.debug('link_lookup_file(%s): entered', req.file)
@@ -29,7 +29,7 @@ async function link_lookup_file(req, res, next) {
     next()
 }
 
-async function link_lookup_dir(req, res, next) {
+async function link_lookup_dir(req: Req, res, next) {
     var log = req.log
 
     log.debug('link_lookup_dir(%s): entered', req.link.dir)
@@ -49,11 +49,11 @@ async function link_lookup_dir(req, res, next) {
     next()
 }
 
-function link(req, res, next) {
+function link(req: Req, res, next) {
     var log = req.log
 
     log.debug('link(%s->%s): entered', req._destname, req._filename)
-    getDsFs().link(req._filename, req._destname, function(err) {
+    req.fs.link(req._filename, req._destname, function(err) {
         if (err) {
             log.warn(err, 'link(%s): failed', req._destname)
             // XXX better error return codes
@@ -67,11 +67,11 @@ function link(req, res, next) {
     })
 }
 
-function link_stat(req, res, next) {
+function link_stat(req: Req, res, next) {
     var log = req.log
 
     log.debug('link_stat(%s): entered', req._destname)
-    getDsFs().lstat(req._destname, function(err, stats) {
+    req.fs.lstat(req._destname, function(err, stats) {
         if (err) {
             log.warn(err, 'link_stat(%s): failed', req._destname)
             res.error(nfs.NFS3ERR_IO)

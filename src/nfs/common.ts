@@ -6,26 +6,26 @@
 
 import * as assert from 'assert-plus'
 import * as nfs from '@diginet/nfs'
-import { getDsFs } from '../fs'
+import { Req } from '.'
 
 ///-- API
 
-export async function fhandle_to_filename(call, reply, next) {
-    var fhandle = call.fhandle || call.object
-    var log = call.log
+export async function fhandle_to_filename(req: Req, reply, next) {
+    var fhandle = req.fhandle || req.object
+    var log = req.log
 
     log.debug('fhandle_to_filename(%s): entered', fhandle)
     assert.string(fhandle, 'call.fhandle')
 
     try {
-        var name = await call.fhdb.fhandle(fhandle)
+        var name = await req.fhdb.fhandle(fhandle)
     } catch (err) {
         log.warn(err, 'fhandle_to_filename(%s): failed', fhandle)
         reply.error(err.nfsErrorCode)
         next(false)
         return
     }
-    call._filename = name
+    req._filename = name
     log.debug('fhandle_to_filename(%s): done: %s', fhandle, name)
     next()
 }
@@ -55,18 +55,18 @@ export function handle_error(err, req, res, next) {
     next(false)
 }
 
-export function open(call, reply, next) {
-    var log = call.log
+export function open(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('open(%s): entered', call.object)
+    log.debug('open(%s): entered', req.object)
 
-    if (call.fd_cache.has(call.object)) {
-        call.stats = call.fd_cache.get(call.object)
+    if (req.fd_cache.has(req.object)) {
+        req.stats = req.fd_cache.get(req.object)
         next()
         return
     }
 
-    getDsFs().stat(call._filename, function(st_err, stats) {
+    req.fs.stat(req._filename, function(st_err, stats) {
         if (st_err) {
             log.warn(st_err, 'open: stat failed')
             reply.error(nfs.NFS3ERR_IO)
@@ -74,7 +74,7 @@ export function open(call, reply, next) {
             return
         }
 
-        getDsFs().open(call._filename, 'r+', function(err, fd) {
+        req.fs.open(req._filename, 'r+', function(err, fd) {
             if (err) {
                 log.warn(err, 'open: failed')
                 reply.error(nfs.NFS3ERR_SERVERFAULT)
@@ -82,13 +82,13 @@ export function open(call, reply, next) {
                 return
             }
 
-            call.stats = {
+            req.stats = {
                 fd: fd,
                 size: stats.size
             }
-            call.fd_cache.set(call.object, call.stats)
+            req.fd_cache.set(req.object, req.stats)
 
-            log.debug('open(%s): done => %j', call.object, call.stats)
+            log.debug('open(%s): done => %j', req.object, req.stats)
             next()
         })
     })

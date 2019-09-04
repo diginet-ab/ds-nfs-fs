@@ -8,26 +8,26 @@ import * as path from 'path'
 import * as nfs from '@diginet/nfs'
 import * as common from './common'
 import * as rpc from '@diginet/oncrpc'
-import { getDsFs } from '../fs'
+import { Req } from '.';
 
-function readdir(call, reply, next) {
-    var log = call.log
-    log.debug('readdir(%s): entered', call._filename)
+function readdir(req: Req, reply, next) {
+    var log = req.log
+    log.debug('readdir(%s): entered', req._filename)
 
     // XXX TBD handle . and ..
-    getDsFs().readdir(call._filename, function(err, files) {
+    req.fs.readdir(req._filename, function(err, files) {
         if (err) {
-            log.warn(err, 'readdir(%s): failed', call.dir)
+            log.warn(err, 'readdir(%s): failed', req.dir)
             reply.error(err.code === 'ENOTDIR' ? nfs.NFS3ERR_NOTDIR : nfs.NFS3ERR_IO)
             next(false)
             return
         }
 
         // The cookieverf will be 0 on the initial call.
-        var h = common.hash(call._filename)
-        if (call.cookieverf.readUInt32LE(0) != 0) {
+        var h = common.hash(req._filename)
+        if (req.cookieverf.readUInt32LE(0) != 0) {
             // This is a follow-up call, confirm cookie.
-            if (call.cookieverf.readUInt32LE(0) != h) {
+            if (req.cookieverf.readUInt32LE(0) != h) {
                 reply.error(nfs.NFS3ERR_BAD_COOKIE)
                 next(false)
                 return
@@ -44,7 +44,7 @@ function readdir(call, reply, next) {
         var sz = 116
         files.every(function(f) {
             // The call cookie will be 0 on the initial call
-            if (call.cookie != 0 && call.cookie >= cook) {
+            if (req.cookie != 0 && req.cookie >= cook) {
                 // we need to scan the dir until we reach the right entry
                 cook++
                 return true
@@ -54,13 +54,13 @@ function readdir(call, reply, next) {
             // call.count bytes.
             // list_true (4) + fileid (8) + cookie (8) + name_len
             var delta = 20 + rpc.XDR.byteLength(f)
-            if (sz + delta > call.count) {
+            if (sz + delta > req.count) {
                 reply.eof = false
                 return false
             }
 
             reply.addEntry({
-                fileid: common.hash(path.join(call._filename, f)),
+                fileid: common.hash(path.join(req._filename, f)),
                 name: f,
                 cookie: cook++
             })
@@ -72,9 +72,9 @@ function readdir(call, reply, next) {
         reply.cookieverf.fill(0)
         reply.cookieverf.writeUInt32LE(h, 0, true)
 
-        getDsFs().stat(call._filename, function(err2, stats) {
+        req.fs.stat(req._filename, function(err2, stats) {
             if (err2) {
-                log.warn(err2, 'readdir(%s): stat failed', call._filename)
+                log.warn(err2, 'readdir(%s): stat failed', req._filename)
             } else {
                 reply.setDirAttributes(stats)
             }

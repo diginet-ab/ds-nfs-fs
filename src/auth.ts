@@ -1,3 +1,5 @@
+import { Req } from "./nfs";
+
 // Copyright 2013 Joyent, Inc.  All rights reserved.
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
@@ -5,7 +7,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
-export function  authorize(req, res, next) {
+export function  authorize(req: Req, res, next) {
     // Let everything through
     // if (!req.is_user(0)) {
     //     res.status = nfs.NFS3ERR_ACCES;

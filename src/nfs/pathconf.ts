@@ -6,17 +6,17 @@
 
 import * as nfs from '@diginet/nfs'
 import * as common from './common'
-import { getDsFs } from '../fs';
+import { Req } from '.';
 
 // Stolen from: http://goo.gl/fBLulQ (IBM)
-function pathconf(call, reply, next) {
-    var log = call.log
+function pathconf(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('pathconf(%s): entered', call.object)
+    log.debug('pathconf(%s): entered', req.object)
 
-    getDsFs().stat(call._filename, function(err, stats) {
+    req.fs.stat(req._filename, function(err, stats) {
         if (err) {
-            log.debug(err, 'pathconf(%s): stat failed', call._filename)
+            log.debug(err, 'pathconf(%s): stat failed', req._filename)
             reply.error(nfs.NFS3ERR_STALE)
             reply.send()
             next(false)
@@ -30,7 +30,7 @@ function pathconf(call, reply, next) {
             reply.case_insensitive = false
             reply.case_preserving = true
 
-            log.debug('pathconf(%s): done', call.object)
+            log.debug('pathconf(%s): done', req.object)
             reply.send()
             next()
         }

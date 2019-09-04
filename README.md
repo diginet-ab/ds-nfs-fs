@@ -1,35 +1,116 @@
 # ds-nfs-fs
-Exposes ds-fs over NFS to allow mounting of GridFs file system in linux.
+Exposes a ds-fs file system over NFS (v3 only), and allows a client to mount the file system.
 
-## Starting the server:
-- Run npm install
-- Run typescript compile
-- Start the server with "node dist/index.js"
+## Usage
 
-The server will look for environment variables "MONGODB_SERVICE_HOST" and "MONGODB_SERVICE_PORT", and if found, will directly connect to MongoDB via that address.
+### Portmapper
 
-If those environment variables cannot be found, the server attempts to connect to the central server on the address specified in the environment varaibles "CENTRAL_SERVER_SERVICE_HOST" and "CENTRAL_SERVER_SERVICE_PORT". 
+The RPC protocol behind NFS, ONC RPC, uses a portmapper server to tell connecting clients which ports to connect to. This portmapper is usually listening on port 111. When launching our NFS server, we need to make sure that the portmapper server is running, and is configured with our own ports.
 
-These environment variables should automatically be provided if running in a Kubernetes cluster.
+On some systems, the portmapper server is already running as a background service, and we will in that case need to register our own configuration with the running service. On other systems, the portmapper is not running and we would then need to launch the server. One way to tell which is to simply attempt to launch the portmap server on port 111 - if it returns an error "EADDRINUSE", we know that the portmapper is already running and we should register with the portmap service.
 
-The NFS server is then started. The ports 1892 (mountd), 2049 (nfs) and 111 (rpcbind) must be opened (all are TCP).
+Here is how that would be done:
 
-## Mounting the filesystem in ubuntu:
+```typescript
+import * as nfs from '@diginet/ds-nfs-fs'
 
-If the server is running on your local machine:
+async function main() {
+    try {
+        await nfs.Portmap.launchPortmapServer()
+    }
+    catch (e) {
+        if (e.code === 'EADDRINUSE') {
+            await nfs.Portmap.registerWithRunningPortmapper()
+        }
+        else {
+            throw e
+        }
+    }
+}
 
-Run "sudo mount 127.0.0.1:/ /path"
+main()
+```
 
-If an error occurs, make sure you have installed the package nfs-common.
+In this example, the default ports of 2049 for NFS, 1892 for mount and 111 for portmapper are used since we are not passing any options.
+
+It is possible to pass an options object, where the  following properties can be included:
+
+- nfsPort - The port where our NFS server will listen. Default: 2049
+- mountPort - The port where our mount server will listen. Default: 1892
+- portmapPort - The port where the portmapper should listen, or where the already running portmapper is listening. Default: 111
+
+```typescript
+const options = { nfsPort: 2345, mountPort: 3000, portmapPort: 9999  }
+
+await nfs.Portmap.launchPortmapServer(options)
+// Or..
+await nfs.Portmap.registerWithRunningPortmapper(options)
+```
+
+If we registered with a running portmapper, we should unregister from the running portmapper server when we are done. If we don't, the modifications will remain. It is important to specify the same options as before (or empty, if we did not pass any options before).
+
+``` typescript
+await nfs.Portmap.unregisterFromRunningPortmapper(options)
+```
+
+When we are done setting up the portmapper, we can launch our NFS server.
+
+### NFS server
+
+```typescript
+import * as nfs from '@diginet/ds-nfs-fs'
+import * as dsFs from '@diginet/ds-fs'
+
+dsFs.configure({ ... }, async () => {
+    const fs = dsFs.BFSRequire('fs')
+    const dispose = await nfs.launchMountAndNfsServer(fs)
+    ...
+    await dispose()
+})
+```
+
+This will launch the NFS server.
+
+The following options can be included:
+
+- nfsAddress - The address for the NFS server to listen on. Default: "0.0.0.0"
+- nfsPort - The port for the NFS server to listen on. Default: 2049
+- nfsHostsAllow (string array) - If specified, allows these IP addresses and does not allow any other addresses.
+- nfsHostsDeny (string array) - If specified, denies these IP addresses.
+- mountAddress - The address for the mount server to listen on. Default: "0.0.0.0"
+- mountPort - The port for the mount server to listen on. Default: 1892
+- mountHostsAllow (string array) - If specified, allows these IP addresses and does not allow any other addresses.
+- mountHostsDeny (string array) - If specified, denies these IP addresses.
+- allowMount - A function which takes in the path which the user attempts to mount, and returns a boolean or a promise that resolves to boolean. If specified, this function will be called when a user attempts to mount the filesystem. If the result is false, the mount request will be denied.
+
+## Mounting the filesystem
+
+Run the following command to mount:
+
+```bash
+sudo mount <address>:<server-path> <mount-dir>
+```
+
+For example:
+
+```shell
+sudo mount 127.0.0.1:/ /mount
+```
+
+This will mount a server running on the local machine into the directory /mount.
+
+If an error occurs, make sure you have installed the package nfs-common (sudo apt-get install nfs-common).
+
+### Mounting in Kubernetes:
+
+See [Kubernetes volumes](https://kubernetes.io/docs/concepts/storage/volumes/) or the [NFS example](https://github.com/kubernetes/examples/tree/master/staging/volumes/nfs).
+
+Note that it is not possible to mount NFS in kubernetes using the internal cluster DNS name. It is however possible to mount using the ClusterIP.
 
 ## Development
 
-To build a Docker image, run:
+To build, run:
 
 - `npm install`
-
 - `tsc`
-- `npm run buildDocker`. For the command to work, you must be logged in with npm. For that, run `npm login`. The script reads your access file located at ~/.npmrc and copies it to the container in order to gain access to the private packages. 
-
-This will build an image tagged viktorwestberg/decthings:ds-nfs-fs
 

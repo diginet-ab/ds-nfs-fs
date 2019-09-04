@@ -6,15 +6,15 @@
 
 import * as nfs from '@diginet/nfs'
 import * as common from './common'
-import { getDsFs } from '../fs'
+import { Req } from '.';
 
 ///-- API
 
-function access(req, res, next) {
+function access(req: Req, res, next) {
     var log = req.log
 
     log.debug('access(%s, %s): entered', req.object, req._filename)
-    getDsFs().stat(req._filename, function(err, stats) {
+    req.fs.stat(req._filename, function(err, stats) {
         if (err) {
             req.log.warn(err, 'access: fs.stat failed')
             res.error(nfs.NFS3ERR_IO)

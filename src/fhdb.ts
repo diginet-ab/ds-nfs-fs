@@ -23,7 +23,6 @@ import {
     MNT3ERR_NOENT
 } from '@diginet/nfs'
 import { FS } from '@diginet/ds-fs'
-import { getDsFs } from './fs';
 
 ///--- Globals
 
@@ -46,8 +45,9 @@ export default class Fhdb extends EventEmitter {
     log: any
     location: string
     _fhdb: boolean
+    fs: FS
 
-    constructor(opts) {
+    constructor(opts: { log: any; location: string; fs: FS }) {
         super()
 
         assert.object(opts, 'options')
@@ -63,6 +63,7 @@ export default class Fhdb extends EventEmitter {
             },
             true
         )
+        this.fs = opts.fs
 
         this._fhdb = true // MDB flag
 
@@ -91,7 +92,7 @@ export default class Fhdb extends EventEmitter {
             let fname_string = fname.toString()
             try {
                 await new Promise((resolve, reject) => {
-                    getDsFs().lstat(fname_string, err => {
+                    this.fs.lstat(fname_string, err => {
                         if (err) {
                             reject(err)
                         } else {
@@ -124,7 +125,7 @@ export default class Fhdb extends EventEmitter {
 
             try {
                 await new Promise((resolve, reject) => {
-                    getDsFs().lstat(p, err => {
+                    this.fs.lstat(p, err => {
                         if (err) {
                             reject(err)
                         } else {

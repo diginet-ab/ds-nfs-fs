@@ -6,13 +6,13 @@
 
 import * as nfs from '@diginet/nfs'
 import * as common from './common'
-import { getDsFs } from '../fs'
+import { Req } from '.';
 
-function readlink(req, res, next) {
+function readlink(req: Req, res, next) {
     var log = req.log
 
     log.debug('readlink(%s, %s): entered', req.object, req._filename)
-    getDsFs().lstat(req._filename, function(err, stats) {
+    req.fs.lstat(req._filename, function(err, stats) {
         if (err) {
             log.warn(err, 'readlink: lstat failed')
             res.error(nfs.NFS3ERR_IO)
@@ -27,7 +27,7 @@ function readlink(req, res, next) {
             return
         }
 
-        getDsFs().readlink(req._filename, function(l_err, val) {
+        req.fs.readlink(req._filename, function(l_err, val) {
             if (l_err) {
                 log.warn(l_err, 'readlink: failed')
                 res.error(nfs.NFS3ERR_IO)

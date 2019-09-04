@@ -7,65 +7,65 @@
 import * as nfs from '@diginet/nfs'
 import * as path from 'path'
 import * as common from './common'
-import { getDsFs } from '../fs'
+import { Req } from '.';
 
-async function rename_get_from_dir(call, reply, next) {
-    var log = call.log
+async function rename_get_from_dir(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('rename_get_from_dir(%s): entered', call.from.dir)
+    log.debug('rename_get_from_dir(%s): entered', req.from.dir)
 
     try {
-        var name = await call.fhdb.fhandle(call.from.dir)
+        var name = await req.fhdb.fhandle(req.from.dir)
     } catch (err) {
-        log.warn(err, 'rename_get_from_dir(%s): fhandle notfound', call.from.dir)
+        log.warn(err, 'rename_get_from_dir(%s): fhandle notfound', req.from.dir)
         reply.error(err.nfsErrorCode)
         next(false)
         return
     }
 
-    call._from_dirname = name
-    call._from_filename = path.join(name, call.from.name)
-    log.debug('rename_get_from_dir(%s): done -> %s', call.from.dir, name)
+    req._from_dirname = name
+    req._from_filename = path.join(name, req.from.name)
+    log.debug('rename_get_from_dir(%s): done -> %s', req.from.dir, name)
     next()
 }
 
-async function rename_get_to_dir(call, reply, next) {
-    var log = call.log
+async function rename_get_to_dir(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('rename_get_to_dir(%s): entered', call.to.dir)
+    log.debug('rename_get_to_dir(%s): entered', req.to.dir)
 
     try {
-        var name = await call.fhdb.fhandle(call.to.dir)
+        var name = await req.fhdb.fhandle(req.to.dir)
     } catch (err) {
-        log.warn(err, 'rename_get_to_dir(%s): fhandle notfound', call.to.dir)
+        log.warn(err, 'rename_get_to_dir(%s): fhandle notfound', req.to.dir)
         reply.error(err.nfsErrorCode)
         next(false)
         return
     }
 
-    call._to_dirname = name
-    call._to_filename = path.join(name, call.to.name)
-    log.debug('rename_get_to_dir(%s): done -> %s', call.to.dir, name)
+    req._to_dirname = name
+    req._to_filename = path.join(name, req.to.name)
+    log.debug('rename_get_to_dir(%s): done -> %s', req.to.dir, name)
     next()
 }
 
-function rename(call, reply, next) {
-    var log = call.log
+function rename(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('rename(%s -> %s): entered', call._from_filename, call._to_filename)
-    getDsFs().rename(call._from_filename, call._to_filename, function(err) {
+    log.debug('rename(%s -> %s): entered', req._from_filename, req._to_filename)
+    req.fs.rename(req._from_filename, req._to_filename, function(err) {
         if (err) {
-            log.warn(err, 'rename(%s, %s): failed', call._from_filename, call._to_filename)
+            log.warn(err, 'rename(%s, %s): failed', req._from_filename, req._to_filename)
             reply.error(nfs.NFS3ERR_NOENT)
             next(false)
             return
         }
 
         // update the file handle
-        call.fhdb.mv(call._from_filename, call._to_filename, function(d_err) {
+        req.fhdb.mv(req._from_filename, req._to_filename, function(d_err) {
             if (d_err) {
-                log.warn(d_err, 'rename(%s, %s): mv fh failed', call._from_filename, call._to_filename)
-                common.handle_error(d_err, call, reply, next)
+                log.warn(d_err, 'rename(%s, %s): mv fh failed', req._from_filename, req._to_filename)
+                common.handle_error(d_err, req, reply, next)
             } else {
                 log.debug('rename: done')
                 reply.send()

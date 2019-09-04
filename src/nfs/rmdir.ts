@@ -7,77 +7,77 @@
 import * as nfs from '@diginet/nfs'
 import * as path from 'path'
 import * as common from './common'
-import { getDsFs } from '../fs';
+import { Req } from '.';
 
-async function rmdir_lookup_dir(call, reply, next) {
-    var log = call.log
+async function rmdir_lookup_dir(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('rmdir_lookup_dir(%s): entered', call._object.dir)
+    log.debug('rmdir_lookup_dir(%s): entered', req._object.dir)
 
     try {
-        var name = await call.fhdb.fhandle(call._object.dir)
+        var name = await req.fhdb.fhandle(req._object.dir)
     } catch (err) {
-        log.warn(err, 'rmdir_lookup_dir(%s): fhandle notfound', call._object.dir)
+        log.warn(err, 'rmdir_lookup_dir(%s): fhandle notfound', req._object.dir)
         reply.error(err.nfsErrorCode)
         next(false)
         return
     }
 
-    call._dirname = name
-    call._filename = path.join(name, call._object.name)
-    log.debug('rmdir_lookup_dir(%s): done -> %s', call._object.dir, name)
+    req._dirname = name
+    req._filename = path.join(name, req._object.name)
+    log.debug('rmdir_lookup_dir(%s): done -> %s', req._object.dir, name)
     next()
 }
 
-function rmdir_stat_dir(call, reply, next) {
-    var log = call.log
+function rmdir_stat_dir(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('rmdir_stat_dir(%s): entered', call._filename)
-    getDsFs().lstat(call._filename, function(err, stats) {
+    log.debug('rmdir_stat_dir(%s): entered', req._filename)
+    req.fs.lstat(req._filename, function(err, stats) {
         if (err) {
-            log.warn(err, 'rmdir_stat_dir(%s): failed', call._filename)
+            log.warn(err, 'rmdir_stat_dir(%s): failed', req._filename)
             reply.error(nfs.NFS3ERR_IO)
             next(false)
             return
         }
         if (!stats.isDirectory()) {
-            log.warn(err, 'rmdir_stat_dir(%s): not a directory', call._filename)
+            log.warn(err, 'rmdir_stat_dir(%s): not a directory', req._filename)
             reply.error(nfs.NFS3ERR_NOTDIR)
             next(false)
             return
         }
 
-        log.debug('rmdir_stat_dir(%s): done', call._filename)
+        log.debug('rmdir_stat_dir(%s): done', req._filename)
         next()
     })
 }
 
-function rmdir(call, reply, next) {
-    var log = call.log
+function rmdir(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('rmdir(%s): entered', call._filename)
-    getDsFs().rmdir(call._filename, function(err) {
+    log.debug('rmdir(%s): entered', req._filename)
+    req.fs.rmdir(req._filename, function(err) {
         if (err && err.code !== 'ENOENT') {
             if (err.code === 'ENOTEMPTY') {
-                log.info('rmdir(%s): directory not empty', call._filename)
+                log.info('rmdir(%s): directory not empty', req._filename)
             } else if (err.code === 'EEXIST') {
                 // EEXIST seems to be what we actually get for not empty
-                log.info('rmdir(%s): directory not empty', call._filename)
+                log.info('rmdir(%s): directory not empty', req._filename)
                 err.code = 'ENOTEMPTY'
             } else {
-                log.warn(err, 'rmdir(%s): failed', call._filename)
+                log.warn(err, 'rmdir(%s): failed', req._filename)
             }
-            common.handle_error(err, call, reply, next)
+            common.handle_error(err, req, reply, next)
             return
         }
 
         // delete file handle
-        call.fhdb.del(call._filename, function(d_err) {
+        req.fhdb.del(req._filename, function(d_err) {
             if (d_err) {
-                log.trace(d_err, 'rmdir(%s): del fh failed', call._filename)
-                common.handle_error(d_err, call, reply, next)
+                log.trace(d_err, 'rmdir(%s): del fh failed', req._filename)
+                common.handle_error(d_err, req, reply, next)
             } else {
-                log.debug('rmdir(%s): done', call._filename)
+                log.debug('rmdir(%s): done', req._filename)
                 reply.send()
                 next()
             }

@@ -7,17 +7,17 @@
 import * as assert from 'assert-plus'
 import * as nfs from '@diginet/nfs'
 import * as common from './common'
-import { getDsFs } from '../fs';
+import { Req } from '.';
 
-function commit(call, reply, next) {
-    var log = call.log
-    var stats = call.stats
+function commit(req: Req, reply, next) {
+    var log = req.log
+    var stats = req.stats
 
-    log.debug('commit(%s): entered', call.object)
+    log.debug('commit(%s): entered', req.object)
 
     assert.ok(stats)
 
-    getDsFs().fsync(stats.fd, function(err) {
+    req.fs.fsync(stats.fd, function(err) {
         if (err) {
             log.warn(err, 'commit: fsync failed')
             reply.error(nfs.NFS3ERR_SERVERFAULT)

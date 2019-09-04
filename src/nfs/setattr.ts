@@ -6,7 +6,7 @@
 
 import * as nfs from '@diginet/nfs'
 import * as common from './common'
-import { getDsFs } from '../fs'
+import { Req } from '.';
 
 ///-- API
 
@@ -27,7 +27,7 @@ import { getDsFs } from '../fs'
 //      "atime"
 // setattr_time - set the mtime and atime if necessary
 
-function setattr_mode(req, res, next) {
+function setattr_mode(req: Req, res, next) {
     var attrs = req.new_attributes
     var log = req.log
 
@@ -53,7 +53,7 @@ function setattr_mode(req, res, next) {
     }
 }
 
-function setattr_own(req, res, next) {
+function setattr_own(req: Req, res, next) {
     var attrs = req.new_attributes
     var log = req.log
 
@@ -64,7 +64,7 @@ function setattr_own(req, res, next) {
         return
     }
 
-    getDsFs().lstat(req._filename, function(err, stats) {
+    req.fs.lstat(req._filename, function(err, stats) {
         if (err) {
             log.warn(err, 'setattr: chown failed')
             res.error(nfs.NFS3ERR_SERVERFAULT)
@@ -106,13 +106,13 @@ function setattr_own(req, res, next) {
     })
 }
 
-function setattr_size(req, res, next) {
+function setattr_size(req: Req, res, next) {
     var attrs = req.new_attributes
     var log = req.log
 
     log.debug('setattr_size(%s, %d): entered', req._filename, attrs.size)
     if (attrs.size !== null) {
-        getDsFs().truncate(req._filename, attrs.size, function(err) {
+        req.fs.truncate(req._filename, attrs.size, function(err) {
             if (err) {
                 log.warn(err, 'setattr: truncate failed')
                 res.error(nfs.NFS3ERR_SERVERFAULT)
@@ -129,7 +129,7 @@ function setattr_size(req, res, next) {
     }
 }
 
-function setattr_get_mtime(req, res, next) {
+function setattr_get_mtime(req: Req, res, next) {
     var attrs = req.new_attributes
     var log = req.log
 
@@ -162,7 +162,7 @@ function setattr_get_mtime(req, res, next) {
     }
 
     // time_how is DONT_CHANGE but we may need the current timestamps
-    getDsFs().lstat(req._filename, function(err, stats) {
+    req.fs.lstat(req._filename, function(err, stats) {
         log.debug('setattr: mtime keep')
         if (err) {
             log.warn(err, 'setattr: getmtime stat failed')
@@ -177,7 +177,7 @@ function setattr_get_mtime(req, res, next) {
     })
 }
 
-function setattr_get_atime(req, res, next) {
+function setattr_get_atime(req: Req, res, next) {
     var attrs = req.new_attributes
     var log = req.log
 
@@ -210,7 +210,7 @@ function setattr_get_atime(req, res, next) {
     }
 
     // time_how is DONT_CHANGE but we may need the current timestamps
-    getDsFs().lstat(req._filename, function(err, stats) {
+    req.fs.lstat(req._filename, function(err, stats) {
         log.debug('setattr: atime keep')
         if (err) {
             log.warn(err, 'setattr: getatime stat failed')
@@ -225,7 +225,7 @@ function setattr_get_atime(req, res, next) {
     })
 }
 
-function setattr_time(req, res, next) {
+function setattr_time(req: Req, res, next) {
     var attrs = req.new_attributes
     var log = req.log
     var mtime

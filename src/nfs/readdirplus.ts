@@ -9,12 +9,12 @@ import * as nfs from '@diginet/nfs'
 import * as vasync from 'vasync'
 import * as common from './common'
 import * as rpc from '@diginet/oncrpc'
-import { getDsFs } from '../fs'
+import { Req } from '.';
 var XDR = rpc.XDR
 
-function readdirplus(call, reply, next) {
-    var log = call.log
-    log.debug('readdirplus(%s): entered', call._filename)
+function readdirplus(req: Req, reply, next) {
+    var log = req.log
+    log.debug('readdirplus(%s): entered', req._filename)
 
     var error = null
     var cook = 1
@@ -30,7 +30,7 @@ function readdirplus(call, reply, next) {
 
     function process_entry(fname, nextent) {
         // The call cookie will be 0 on the initial call
-        if (call.cookie != 0 && call.cookie >= cook) {
+        if (req.cookie != 0 && req.cookie >= cook) {
             // we need to scan the dir until we reach the right entry
             cook++
             nextent()
@@ -47,7 +47,7 @@ function readdirplus(call, reply, next) {
         // call.dircount bytes.
         // list_true (4) + fileid (8) + cookie (8) + name_len
         var delta = 20 + XDR.byteLength(fname)
-        if (sz + delta > call.dircount) {
+        if (sz + delta > req.dircount) {
             reply.eof = false
             nextent()
             return
@@ -60,7 +60,7 @@ function readdirplus(call, reply, next) {
         // bool_name_attr (4) + name_attr_len +
         // bool_name_handle (4) + name_handle_len
         delta = 28 + XDR.byteLength(fname) + 84 + 64
-        if (totsz + delta > call.maxcount) {
+        if (totsz + delta > req.maxcount) {
             reply.eof = false
             nextent()
             return
@@ -69,15 +69,15 @@ function readdirplus(call, reply, next) {
 
         // path.join will properly handle resolving . and .. into the correct
         // name for the fhdb.lookup.
-        var p = path.join(call._filename, fname)
-        getDsFs().lstat(p, async function(err2, stats) {
+        var p = path.join(req._filename, fname)
+        req.fs.lstat(p, async function(err2, stats) {
             if (err2) {
                 log.warn(err2, 'readdirplus(%s): stat failed', p)
                 error = error || nfs.NFS3ERR_IO
                 nextent()
             } else {
                 try {
-                    var fhandle = await call.fhdb.lookup(call._filename)
+                    var fhandle = await req.fhdb.lookup(req._filename)
                 } catch (err3) {
                     log.warn(err3, 'readdirplus(%s): lu failed', p)
                     error = error || err3.nfsErrorCode // was nfs.NFS#ERR_IO
@@ -102,13 +102,13 @@ function readdirplus(call, reply, next) {
             reply.error(error)
             next(false)
         } else {
-            getDsFs().stat(call._filename, function(err, stats) {
+            req.fs.stat(req._filename, function(err, stats) {
                 if (err) {
-                    log.warn(err, 'readdirplus(%s): dir stat failed', call._filename)
+                    log.warn(err, 'readdirplus(%s): dir stat failed', req._filename)
                 } else {
                     reply.setDirAttributes(stats)
                 }
-                log.debug('readdirplus(%s): done', call._filename)
+                log.debug('readdirplus(%s): done', req._filename)
                 reply.send()
                 next()
             })
@@ -116,10 +116,10 @@ function readdirplus(call, reply, next) {
     }
 
     // The cookieverf will be 0 on the initial call.
-    var h = common.hash(call._filename)
-    if (call.cookieverf.readUInt32LE(0) != 0) {
+    var h = common.hash(req._filename)
+    if (req.cookieverf.readUInt32LE(0) != 0) {
         // This is a follow-up call, confirm cookie.
-        if (call.cookieverf.readUInt32LE(0) != h) {
+        if (req.cookieverf.readUInt32LE(0) != h) {
             reply.error(nfs.NFS3ERR_BAD_COOKIE)
             next(false)
             return
@@ -135,9 +135,9 @@ function readdirplus(call, reply, next) {
     // fs.readdir omits . and .. so we manually prepend them
     process_entry('.', function(erra) {
         process_entry('..', function(errb) {
-            getDsFs().readdir(call._filename, function(err1, files) {
+            req.fs.readdir(req._filename, function(err1, files) {
                 if (err1) {
-                    log.warn(err1, 'readdirplus(%s): rd failed', call._filename)
+                    log.warn(err1, 'readdirplus(%s): rd failed', req._filename)
                     error = err1.code === 'ENOTDIR' ? nfs.NFS3ERR_NOTDIR : nfs.NFS3ERR_IO
                     reply.error(error)
                     next(false)

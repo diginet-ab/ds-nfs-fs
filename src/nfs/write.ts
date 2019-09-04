@@ -7,24 +7,23 @@
 import * as assert from 'assert-plus'
 import * as nfs from '@diginet/nfs'
 import * as common from './common'
-
-import { getDsFs } from '../fs'
+import { Req } from '.';
 
 ///-- API
 
 /**
  * Calls the function write, and then calls fsync to synchronize the written data.
  */
-async function write(call, reply, next) {
-    var c = call
-    var log = call.log
-    var stats = call.stats
+async function write(req: Req, reply, next) {
+    var c = req
+    var log = req.log
+    var stats = req.stats
 
     log.debug('write(%s, %d, %d): entered', c.object, c.offset, c.count)
 
     assert.ok(stats)
 
-    getDsFs().write(stats.fd, c.data, 0, c.count, c.offset, async function(err, n, b) {
+    req.fs.write(stats.fd, c.data, 0, c.count, c.offset, async function(err, n, b) {
         if (err) {
             log.warn(err, 'write: failed')
             reply.error(nfs.NFS3ERR_SERVERFAULT)
@@ -32,7 +31,7 @@ async function write(call, reply, next) {
             return
         }
 
-        getDsFs().fsync(stats.fd, async err => {
+        req.fs.fsync(stats.fd, async err => {
             if (err) {
                 log.warn(err, 'write: failed at fsync')
                 reply.error(nfs.NFS3ERR_SERVERFAULT)

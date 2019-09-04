@@ -6,17 +6,17 @@
 
 import * as common from './common'
 import * as nfs from '@diginet/nfs'
-import { getDsFs } from '../fs'
+import { Req } from '.';
 
 // Values obtained from: http://goo.gl/fBLulQ (IBM)
-function fsinfo(call, reply, next) {
-    var log = call.log
+function fsinfo(req: Req, reply, next) {
+    var log = req.log
 
-    log.debug('fsinfo(%s): entered', call.object)
+    log.debug('fsinfo(%s): entered', req.object)
 
-    getDsFs().stat(call._filename, function(err, stats) {
+    req.fs.stat(req._filename, function(err, stats) {
         if (err) {
-            log.debug(err, 'fsinfo(%s): stat failed', call._filename)
+            log.debug(err, 'fsinfo(%s): stat failed', req._filename)
             reply.error(nfs.NFS3ERR_STALE)
             reply.send()
             next(false)
@@ -34,7 +34,7 @@ function fsinfo(call, reply, next) {
             } // milliseconds
             reply.properties = nfs.FSF3_LINK | nfs.FSF3_SYMLINK | nfs.FSF3_HOMOGENOUS | nfs.FSF3_CANSETTIME
 
-            log.debug('fsinfo(%s): done', call.object)
+            log.debug('fsinfo(%s): done', req.object)
             reply.send()
             next()
         }

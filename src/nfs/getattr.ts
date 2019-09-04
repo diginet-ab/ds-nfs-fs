@@ -6,13 +6,13 @@
 
 import * as nfs from '@diginet/nfs'
 import * as common from './common'
-import { getDsFs } from '../fs';
+import { Req } from '.';
 
-function getattr(req, res, next) {
+function getattr(req: Req, res, next) {
     var log = req.log
 
     log.debug('getattr(%s, %s): entered', req.object, req._filename)
-    getDsFs().lstat(req._filename, function(err, stats) {
+    req.fs.lstat(req._filename, function(err, stats) {
         if (err) {
             req.log.warn(err, 'getattr: stat failed')
             res.error(nfs.NFS3ERR_IO)
