@@ -5,18 +5,14 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import * as fs from 'fs'
-import * as os from 'os'
-import * as path from 'path'
 import * as util from 'util'
-import * as assert from 'assert-plus'
 
-import * as userid from 'userid'
 import * as LRU from 'lru-cache'
 
 import { createLogger } from 'bunyan'
 
 import * as portmap from './portmap'
-import Fhdb from './fhdb'
+import { Fhdb, DB } from './fhdb'
 
 import * as _bunyan from 'bunyan'
 import * as bunyan from './bunyan'
@@ -40,10 +36,6 @@ type PMapConfig = {
     address: string
 }
 
-export type DbConfig = {
-    location: string
-}
-
 export type MountConfig = {
     log: any
     fhdb: Fhdb
@@ -54,8 +46,6 @@ export type MountConfig = {
 
 export type NFSConfig = {
     log: any
-    uid: number
-    gid: number
     fd_cache: {
         max?: number
         ttl?: number
@@ -69,13 +59,12 @@ export type NFSConfig = {
 
 type Config = {
     log: any
-    database: DbConfig
     mount: MountConfig
     nfs: NFSConfig
 }
 
 const LOG = bunyan.createLogger().child({
-    level: 'debug', // 'trace' for verbose, 'debug' for debug, 'info' for normal
+    level: 100, // 'trace' for verbose, 'debug' for debug, 'info' for normal, 100 for none.
     src: true
 })
 
@@ -125,44 +114,20 @@ function configurePortmap(nfsPort: number, mountPort: number, pmapPort: number):
  */
 function configure(options: {
     fs: FS
-    dbPath: string
+    db: DB
     nfsHostsAllow?: string[]
     nfsHostsDeny?: string[]
     mountHostsAllow?: string[]
     mountHostsDeny?: string[]
     allowMount?: (path: string) => boolean
 }) {
-    let t_uid: number
-    let t_gid: number
-
-    try {
-        t_uid = convert_neg_id(userid.uid('nobody'))
-    } catch (e1) {
-        t_uid = 65534
-    }
-
-    try {
-        t_gid = convert_neg_id(userid.gid('nobody'))
-    } catch (e1) {
-        // Linux uses 'nogroup' instead of 'nobody'
-        try {
-            t_gid = convert_neg_id(userid.gid('nogroup'))
-        } catch (e2) {
-            t_gid = t_uid
-        }
-    }
-
     const fhdb = new Fhdb({
-        location: options.dbPath,
-        log: LOG,
-        fs: options.fs
+        fs: options.fs,
+        db: options.db
     })
 
     const cfg: Config = {
         log: LOG,
-        database: {
-            location: options.dbPath
-        },
         mount: {
             allowMount: options.allowMount,
             hosts_allow: options.mountHostsAllow,
@@ -174,8 +139,6 @@ function configure(options: {
             hosts_allow: options.nfsHostsAllow,
             hosts_deny: options.nfsHostsDeny,
             log: LOG,
-            uid: t_uid,
-            gid: t_gid,
             fd_cache: new LRU({
                 dispose: (key, n: any) => {
                     fs.close(n.fd, function on_close(err) {
@@ -257,6 +220,7 @@ export const Portmap = {
             })
 
             pmapd.listen(cfg.port, cfg.address, () => {
+                console.log('Portmap server listening on:', { address: '0.0.0.0', port: portmapPort })
                 resolve()
             })
         })
@@ -363,6 +327,7 @@ export const Portmap = {
 
 export function launchMountAndNfsServer(
     dsFs: FS,
+    db?: DB,
     options?: {
         nfsAddress?: string
         nfsPort?: number
@@ -374,8 +339,6 @@ export function launchMountAndNfsServer(
         mountHostsAllows?: string[]
         mountHostsDeny?: string[]
         allowMount?: (path: string) => boolean
-
-        dbPath?: string
     }
 ): Promise<{ dispose: () => Promise<void> }> {
     return new Promise((resolve, reject) => {
@@ -390,8 +353,6 @@ export function launchMountAndNfsServer(
             var mountHostsAllow = options.mountHostsAllows
             var mountHostsDeny = options.mountHostsDeny
             var allowMount = options.allowMount
-
-            var dbPath = options.dbPath
         }
 
         if (!nfsAddress) {
@@ -408,12 +369,46 @@ export function launchMountAndNfsServer(
             var mountPort = 1892
         }
 
-        if (!dbPath) {
-            var dbPath = '/var/tmp/sdcnfs'
+        if (!db) {
+            // Create an in-memory database
+            let store = new Map<string, string>()
+            db = {
+                async get(key) {
+                    if (!store.has(key)) {
+                        return { error: 'NotFoundError' }
+                    }
+                    return { value: store.get(key) }
+                },
+                batch() {
+                    let operations: { put: [string, string][]; del: string[] } = { put: [], del: [] }
+                    let batcher = {
+                        put(key: string, value: string) {
+                            operations.put.push([key, value])
+                            return batcher
+                        },
+                        del(key: string) {
+                            this.operations.del.push(key)
+                            return batcher
+                        },
+                        async write() {
+                            operations.put.forEach(el => {
+                                store.set(el[0], el[1])
+                            })
+                            operations.del.forEach(el => {
+                                store.delete(el)
+                            })
+                        }
+                    }
+                    return batcher
+                },
+                close() {
+                    store.clear()
+                }
+            }
         }
 
         // Create some configurations
-        const cfg = configure({ fs: dsFs, dbPath, nfsHostsAllow, nfsHostsDeny, mountHostsAllow, mountHostsDeny, allowMount })
+        const cfg = configure({ fs: dsFs, db, nfsHostsAllow, nfsHostsDeny, mountHostsAllow, mountHostsDeny, allowMount })
         const fhdb = cfg.nfs.fhdb
 
         const cleanup = () => {
@@ -425,36 +420,28 @@ export function launchMountAndNfsServer(
             })
         }
 
-        fhdb.once('error', e => {
+        const mountd = createMountServer(cfg.mount)
+
+        mountd.on('error', (e: any) => {
             reject(e)
         })
 
-        fhdb.once('ready', () => {
-            // file handle DB exists now, ensure modes are more secure
-            fs.chmodSync(fhdb.location, parseInt('0700', 8))
-            fs.chmodSync(path.join(fhdb.location, 'fh.db'), parseInt('0600', 8))
+        mountd.listen(mountPort, mountAddress, () => {
+            let mountAddress = mountd.address()
+            console.log('mount server listening on: ', { address: mountAddress.address, port: mountAddress.port })
 
-            const mountd = createMountServer(cfg.mount)
+            const nfsd = createNfsServer(cfg.nfs)
 
-            mountd.on('error', (e: any) => {
+            nfsd.on('error', (e: any) => {
+                mountd.close()
                 reject(e)
             })
 
-            mountd.listen(mountPort, mountAddress, () => {
-                console.log('mount server listening on address: ', mountd.address())
-
-                const nfsd = createNfsServer(cfg.nfs)
-
-                nfsd.on('error', (e: any) => {
-                    mountd.close()
-                    reject(e)
-                })
-
-                // nfsd needs to listen on the same IP as configured for the mountd
-                nfsd.listen(nfsPort, nfsAddress, () => {
-                    console.log('nfs server listening on address: ', nfsd.address())
-                    resolve()
-                })
+            // nfsd needs to listen on the same IP as configured for the mountd
+            nfsd.listen(nfsPort, nfsAddress, () => {
+                let nfsAddress = nfsd.address()
+                console.log('nfs server listening on: ', { address: nfsAddress.address, port: nfsAddress.port })
+                resolve()
             })
         })
 

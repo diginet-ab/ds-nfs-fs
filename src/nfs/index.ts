@@ -33,7 +33,7 @@ import symlink from './symlink'
 import write from './write'
 import { NFSConfig } from '../server'
 import { FS } from '@diginet/ds-fs'
-import Fhdb from '../fhdb'
+import { Fhdb } from '../fhdb'
 
 export type Req = {
     fs: FS
