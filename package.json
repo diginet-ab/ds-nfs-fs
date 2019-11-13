@@ -16,19 +16,19 @@
     "url": "https://github.com/joyent/sdc-nfs/issues"
   },
   "dependencies": {
-    "@diginet/ds-fs": "^2.0.53",
-    "@diginet/nfs": "^0.2.1",
+    "@diginet/ds-fs": "^2.0.54",
+    "@diginet/nfs": "^0.2.2",
     "@diginet/oncrpc": "0.2.0",
-    "@types/lru-cache": "^4.1.1",
     "assert-plus": "1.0.0",
     "bunyan": "1.8.12",
     "lru-cache": "5.1.1",
     "once": "1.4.0",
-    "uuid": "3.3.2",
+    "uuid": "3.3.3",
     "vasync": "2.2.0"
   },
   "devDependencies": {
-    "@types/node": "^10.12.10"
+    "@types/node": "^10.12.10",
+    "@types/lru-cache": "^4.1.1"
   },
   "scripts": {
     "start:": "node ./server.js | ./node_modules/.bin/bunyan",

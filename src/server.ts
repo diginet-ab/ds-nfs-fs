@@ -387,7 +387,7 @@ export function launchMountAndNfsServer(
                             return batcher
                         },
                         del(key: string) {
-                            this.operations.del.push(key)
+                            operations.del.push(key)
                             return batcher
                         },
                         async write() {
